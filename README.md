@@ -1,17 +1,48 @@
-Overview
+## Overview
 
-The Deep Packet Inspection (DPI) Engine is a network security project that analyzes network packets in detail to detect protocols, suspicious traffic, and potential security threats. Unlike basic packet filtering, DPI inspects the payload of packets, allowing deeper analysis of network communication.
+This repository now includes a Java implementation of the deep packet analyser. The Java CLI ports the core end-to-end DPI flow from the original C++ version:
 
-This project demonstrates how packet inspection can be used for network monitoring, security analysis, and traffic classification.
+- read `.pcap` files
+- parse Ethernet, IPv4, TCP, and UDP packets
+- extract TLS SNI and HTTP `Host` values
+- classify traffic by application or domain
+- apply blocking rules
+- write forwarded packets to a filtered output PCAP
 
-Features
+The original C++ implementation is still available in the `Packet_anal-main` folder as a reference during migration.
 
-Capture network packets from traffic
+## Java Project Layout
 
-Inspect packet headers and payload
+- `src/main/java/com/ns1903372dot/dpi/DeepPacketAnalyser.java`: CLI entry point
+- `src/main/java/com/ns1903372dot/dpi/PcapIo.java`: PCAP read and write support
+- `src/main/java/com/ns1903372dot/dpi/PacketParser.java`: Ethernet, IPv4, TCP, and UDP parser
+- `src/main/java/com/ns1903372dot/dpi/DpiSupport.java`: SNI extraction, host extraction, classification, rules, and reporting
+- `src/main/java/com/ns1903372dot/dpi/AppType.java`: application categories
+- `src/main/java/com/ns1903372dot/dpi/FiveTuple.java`: flow key model
 
-Identify network protocols
+## Build And Run
 
-Detect suspicious or malicious packets
+Java and `javac` are enough to run the current port:
 
-Log analyzed traffic information
+```powershell
+New-Item -ItemType Directory -Force out
+javac -d out src/main/java/com/ns1903372dot/dpi/*.java
+java -cp out com.ns1903372dot.dpi.DeepPacketAnalyser Packet_anal-main/test_dpi.pcap filtered_output.pcap --block-app YouTube
+```
+
+A minimal `pom.xml` is included for environments that have Maven installed.
+
+## Current Scope Of The Java Port
+
+The Java version currently covers the simplified DPI pipeline:
+
+- offline PCAP processing
+- five-tuple flow tracking
+- TLS SNI extraction
+- HTTP host extraction
+- application classification
+- block-by-IP, app, or domain rules
+- filtered PCAP output
+- summary reporting
+
+The advanced multi-threaded C++ engine has not been fully ported yet.
