@@ -22,6 +22,17 @@ final class DpiEngine {
     record EngineStats(long totalPackets, long forwarded, long dropped, int activeConnections) {
     }
 
+    record ThreadSnapshot(String name, long dispatched, long processed, long forwarded, long dropped) {
+    }
+
+    record EngineSnapshot(
+            EngineStats stats,
+            Map<String, Long> appBreakdown,
+            List<ThreadSnapshot> threadStats,
+            List<String> detectedDomains
+    ) {
+    }
+
     private final Config config;
     private final RuleManager ruleManager;
     private final List<LoadBalancer> loadBalancers = new ArrayList<>();
@@ -100,6 +111,42 @@ final class DpiEngine {
             builder.append(entry.getKey().displayName()).append(": ").append(entry.getValue()).append(System.lineSeparator());
         }
         return builder.toString();
+    }
+
+    EngineSnapshot snapshot() {
+        Map<String, Long> appDistribution = new TreeMap<>(String::compareToIgnoreCase);
+        List<String> domains = new ArrayList<>();
+        for (FastPathProcessor fp : fastPaths) {
+            for (Connection connection : fp.tracker().getAllConnections()) {
+                appDistribution.merge(connection.appType.displayName(), connection.packetsIn + connection.packetsOut, Long::sum);
+                if (connection.domain != null && !connection.domain.isBlank() && !domains.contains(connection.domain)) {
+                    domains.add(connection.domain);
+                }
+            }
+        }
+
+        List<ThreadSnapshot> threadStats = new ArrayList<>();
+        for (LoadBalancer lb : loadBalancers) {
+            LoadBalancer.Stats stats = lb.getStats();
+            threadStats.add(new ThreadSnapshot("LB" + stats.lbId(), stats.dispatched(), 0, 0, 0));
+        }
+        for (FastPathProcessor fp : fastPaths) {
+            FastPathProcessor.Stats stats = fp.getStats();
+            threadStats.add(new ThreadSnapshot(
+                    "FP" + fastPaths.indexOf(fp),
+                    0,
+                    stats.processed(),
+                    stats.forwarded(),
+                    stats.dropped()
+            ));
+        }
+
+        return new EngineSnapshot(
+                new EngineStats(totalPackets, forwardedPackets, droppedPackets, countActiveConnections()),
+                appDistribution,
+                threadStats,
+                domains
+        );
     }
 
     private void createWorkers() {

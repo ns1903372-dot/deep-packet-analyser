@@ -10,82 +10,79 @@ pinned: false
 
 ## Overview
 
-This repository is a Java deep packet analyser / DPI engine with a Hugging Face Spaces deployment setup.
+This repository now has a clearer frontend and backend structure for the Java DPI project.
 
-The project can:
+- Frontend: static web app for uploads, rule inputs, sample selection, report viewing, and downloads
+- Backend: Java HTTP server and API endpoints that run the DPI engine and return results
 
-- read `.pcap` files
-- parse Ethernet, IPv4, TCP, and UDP packets
-- extract TLS SNI and HTTP `Host` values
-- classify traffic by application or domain
-- apply block rules for IPs, apps, domains, and ports
-- process traffic through load balancer and fast-path worker threads
-- write forwarded packets to a filtered output PCAP
-- serve a browser UI for Hugging Face Spaces
+## Architecture
 
-## Project Layout
+Frontend files:
 
-- `src/main/java/com/ns1903372dot/dpi/DeepPacketAnalyser.java`: CLI entry point
-- `src/main/java/com/ns1903372dot/dpi/SpaceServer.java`: Hugging Face web server
-- `src/main/java/com/ns1903372dot/dpi/DpiEngine.java`: engine orchestration
-- `src/main/java/com/ns1903372dot/dpi/LoadBalancer.java`: load balancer workers
-- `src/main/java/com/ns1903372dot/dpi/FastPathProcessor.java`: fast-path inspection workers
-- `src/main/java/com/ns1903372dot/dpi/ConnectionTracker.java`: per-worker flow tracking
-- `src/main/java/com/ns1903372dot/dpi/RuleManager.java`: block rule management
-- `src/main/java/com/ns1903372dot/dpi/PcapIo.java`: PCAP read and write
-- `src/main/java/com/ns1903372dot/dpi/PacketParser.java`: packet parsing
-- `src/main/java/com/ns1903372dot/dpi/DpiSupport.java`: SNI extraction and domain classification
-- `sample-data/test_dpi.pcap`: sample PCAP for testing
-- `Dockerfile`: Hugging Face Docker Space image
+- `web/index.html`
+- `web/styles.css`
+- `web/app.js`
 
-## Local CLI Run
+Backend files:
+
+- `src/main/java/com/ns1903372dot/dpi/SpaceServer.java`
+- `src/main/java/com/ns1903372dot/dpi/AnalysisService.java`
+- `src/main/java/com/ns1903372dot/dpi/DpiEngine.java`
+- `src/main/java/com/ns1903372dot/dpi/RuleManager.java`
+
+Core engine files:
+
+- `src/main/java/com/ns1903372dot/dpi/DeepPacketAnalyser.java`
+- `src/main/java/com/ns1903372dot/dpi/FastPathProcessor.java`
+- `src/main/java/com/ns1903372dot/dpi/LoadBalancer.java`
+- `src/main/java/com/ns1903372dot/dpi/ConnectionTracker.java`
+- `src/main/java/com/ns1903372dot/dpi/PacketParser.java`
+- `src/main/java/com/ns1903372dot/dpi/PcapIo.java`
+
+## API Endpoints
+
+- `GET /api/health`
+- `GET /api/examples`
+- `POST /api/analyze`
+- `GET /download?id=<token>`
+
+## Run Locally
+
+Compile:
 
 ```powershell
 New-Item -ItemType Directory -Force out
 javac -d out src/main/java/com/ns1903372dot/dpi/*.java
-java -cp out com.ns1903372dot.dpi.DeepPacketAnalyser sample-data/test_dpi.pcap filtered_output.pcap --block-app YouTube --lbs 2 --fps-per-lb 2 --verbose
 ```
 
-## Local Space Run
+Run frontend + backend:
 
 ```powershell
-New-Item -ItemType Directory -Force out
-javac -d out src/main/java/com/ns1903372dot/dpi/*.java
 $env:PORT=7860
 java -cp out com.ns1903372dot.dpi.SpaceServer
 ```
 
-Then open `http://localhost:7860`.
+Then open:
 
-## Hugging Face Deployment
+`http://localhost:7860`
 
-Create a Docker Space and push this repository to it. The included `Dockerfile` will:
+## CLI Run
 
-- compile the Java source
-- start the web server on port `7860`
-- expose an upload UI for `.pcap` analysis
+```powershell
+java -cp out com.ns1903372dot.dpi.DeepPacketAnalyser sample-data/test_dpi.pcap filtered_output.pcap --block-app YouTube --lbs 2 --fps-per-lb 2 --verbose
+```
 
-The Space UI lets you:
+## Features In The Web App
 
-- upload a PCAP file
-- optionally block an app, IP, or domain
-- run the Java DPI engine
-- read the report
-- download the filtered PCAP output
+- upload a `.pcap` file
+- use bundled example PCAPs
+- block by app
+- block by domain
+- block by IP
+- view report text
+- view packet statistics
+- download filtered output PCAP
 
-## Supported CLI Options
+## Deployment
 
-- `--block-ip <ip>`
-- `--block-app <app>`
-- `--block-domain <domain>`
-- `--block-port <port>`
-- `--rules-file <file>`
-- `--lbs <count>`
-- `--fps-per-lb <count>`
-- `--queue-size <count>`
-- `--verbose`
-
-## Notes
-
-- A minimal `pom.xml` is included for Maven-based environments.
-- The repository is Java-only source code.
+The included `Dockerfile` is set up for Hugging Face Spaces Docker deployment.

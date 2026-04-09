@@ -10,259 +10,11 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.Base64;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class SpaceServer {
-    private static final String HTML = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Deep Packet Analyser</title>
-              <style>
-                :root {
-                  --bg: #f4f1ea;
-                  --card: #fffaf1;
-                  --ink: #1d2a35;
-                  --accent: #0e7490;
-                  --accent-2: #ef4444;
-                  --line: #d8cfc2;
-                }
-                * { box-sizing: border-box; }
-                body {
-                  margin: 0;
-                  font-family: Georgia, "Times New Roman", serif;
-                  background:
-                    radial-gradient(circle at top left, #fff7db 0, transparent 30%),
-                    linear-gradient(135deg, #f4f1ea, #ebe4d8);
-                  color: var(--ink);
-                }
-                .wrap {
-                  max-width: 980px;
-                  margin: 0 auto;
-                  padding: 32px 20px 48px;
-                }
-                .hero {
-                  background: var(--card);
-                  border: 1px solid var(--line);
-                  border-radius: 24px;
-                  padding: 28px;
-                  box-shadow: 0 20px 40px rgba(29,42,53,0.08);
-                }
-                h1 {
-                  margin: 0 0 12px;
-                  font-size: 2.4rem;
-                  line-height: 1.05;
-                }
-                p {
-                  margin: 0;
-                  font-size: 1rem;
-                  line-height: 1.6;
-                }
-                .grid {
-                  display: grid;
-                  grid-template-columns: 1.3fr 0.9fr;
-                  gap: 20px;
-                  margin-top: 22px;
-                }
-                .panel {
-                  background: rgba(255,250,241,0.96);
-                  border: 1px solid var(--line);
-                  border-radius: 20px;
-                  padding: 22px;
-                }
-                label {
-                  display: block;
-                  font-weight: 700;
-                  margin-bottom: 8px;
-                }
-                input[type=file], select, input[type=text] {
-                  width: 100%;
-                  padding: 12px 14px;
-                  border-radius: 12px;
-                  border: 1px solid #c9bcaa;
-                  background: #fff;
-                  margin-bottom: 14px;
-                }
-                button {
-                  width: 100%;
-                  border: 0;
-                  border-radius: 14px;
-                  padding: 14px 18px;
-                  background: linear-gradient(135deg, var(--accent), #155e75);
-                  color: white;
-                  font-size: 1rem;
-                  font-weight: 700;
-                  cursor: pointer;
-                }
-                button:hover { filter: brightness(1.05); }
-                .sample {
-                  margin-top: 14px;
-                  background: #fff;
-                  border: 1px dashed var(--line);
-                  border-radius: 14px;
-                  padding: 14px;
-                }
-                pre {
-                  white-space: pre-wrap;
-                  word-break: break-word;
-                  background: #17212b;
-                  color: #f8fafc;
-                  border-radius: 16px;
-                  padding: 18px;
-                  min-height: 280px;
-                  overflow: auto;
-                }
-                .muted { color: #5b6873; }
-                .actions {
-                  display: flex;
-                  gap: 12px;
-                  margin-top: 12px;
-                  flex-wrap: wrap;
-                }
-                .linkbtn {
-                  display: inline-block;
-                  padding: 10px 14px;
-                  border-radius: 12px;
-                  background: #fff;
-                  color: var(--ink);
-                  border: 1px solid var(--line);
-                  text-decoration: none;
-                  font-weight: 700;
-                }
-                .warn {
-                  color: var(--accent-2);
-                  font-weight: 700;
-                }
-                @media (max-width: 840px) {
-                  .grid { grid-template-columns: 1fr; }
-                  h1 { font-size: 2rem; }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="wrap">
-                <section class="hero">
-                  <h1>Deep Packet Analyser</h1>
-                  <p>Upload a PCAP file, run the Java DPI engine, apply an optional block rule, and inspect the generated report directly inside your Hugging Face Space.</p>
-                </section>
-
-                <div class="grid">
-                  <section class="panel">
-                    <label for="pcap">PCAP File</label>
-                    <input id="pcap" type="file" accept=".pcap">
-
-                    <label for="blockApp">Block App</label>
-                    <select id="blockApp">
-                      <option value="">No app block</option>
-                      <option>YouTube</option>
-                      <option>Facebook</option>
-                      <option>GitHub</option>
-                      <option>Google</option>
-                      <option>Netflix</option>
-                      <option>Spotify</option>
-                      <option>TikTok</option>
-                      <option>Telegram</option>
-                      <option>Zoom</option>
-                    </select>
-
-                    <label for="blockDomain">Block Domain</label>
-                    <input id="blockDomain" type="text" placeholder="example: youtube.com">
-
-                    <label for="blockIp">Block IP</label>
-                    <input id="blockIp" type="text" placeholder="example: 192.168.1.50">
-
-                    <button id="runBtn" type="button">Analyze PCAP</button>
-
-                    <div class="sample">
-                      <strong>Tip</strong>
-                      <p class="muted">You can also test the engine with the bundled sample file path: <code>sample-data/test_dpi.pcap</code> by using the project locally.</p>
-                    </div>
-                  </section>
-
-                  <section class="panel">
-                    <p class="muted">Execution Output</p>
-                    <pre id="report">Upload a PCAP file to begin.</pre>
-                    <div class="actions" id="actions"></div>
-                    <p class="warn" id="error"></p>
-                  </section>
-                </div>
-              </div>
-
-              <script>
-                const runBtn = document.getElementById("runBtn");
-                const report = document.getElementById("report");
-                const actions = document.getElementById("actions");
-                const error = document.getElementById("error");
-
-                runBtn.addEventListener("click", async () => {
-                  error.textContent = "";
-                  actions.innerHTML = "";
-                  const fileInput = document.getElementById("pcap");
-                  const file = fileInput.files[0];
-                  if (!file) {
-                    error.textContent = "Please choose a PCAP file first.";
-                    return;
-                  }
-
-                  report.textContent = "Running Java DPI engine...";
-
-                  try {
-                    const payload = {
-                      filename: file.name,
-                      data: await fileToBase64(file),
-                      blockApp: document.getElementById("blockApp").value,
-                      blockDomain: document.getElementById("blockDomain").value,
-                      blockIp: document.getElementById("blockIp").value
-                    };
-
-                    const response = await fetch("/analyze", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(payload)
-                    });
-
-                    const result = await response.json();
-                    if (!response.ok) {
-                      throw new Error(result.error || "Request failed");
-                    }
-
-                    report.textContent = result.report;
-                    if (result.downloadPath) {
-                      const link = document.createElement("a");
-                      link.className = "linkbtn";
-                      link.href = result.downloadPath;
-                      link.textContent = "Download Filtered PCAP";
-                      actions.appendChild(link);
-                    }
-                  } catch (err) {
-                    report.textContent = "Upload a PCAP file to begin.";
-                    error.textContent = err.message || String(err);
-                  }
-                });
-
-                function fileToBase64(file) {
-                  return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const result = reader.result;
-                      resolve(String(result).split(",")[1]);
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                  });
-                }
-              </script>
-            </body>
-            </html>
-            """;
-
-    private static final Map<String, Path> DOWNLOADS = new ConcurrentHashMap<>();
+    private static final Path WEB_ROOT = Path.of("web");
+    private static final AnalysisService ANALYSIS_SERVICE = new AnalysisService();
 
     private SpaceServer() {
     }
@@ -270,20 +22,44 @@ public final class SpaceServer {
     public static void main(String[] args) throws IOException {
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "7860"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/", SpaceServer::handleIndex);
-        server.createContext("/analyze", SpaceServer::handleAnalyze);
+        server.createContext("/api/health", SpaceServer::handleHealth);
+        server.createContext("/api/examples", SpaceServer::handleExamples);
+        server.createContext("/api/analyze", SpaceServer::handleAnalyze);
         server.createContext("/download", SpaceServer::handleDownload);
+        server.createContext("/", SpaceServer::handleStatic);
         server.setExecutor(null);
         server.start();
-        System.out.println("Space server running on port " + port);
+        System.out.println("Frontend + backend server running on port " + port);
     }
 
-    private static void handleIndex(HttpExchange exchange) throws IOException {
+    private static void handleHealth(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendText(exchange, 405, "Method not allowed", "text/plain; charset=utf-8");
+            sendJson(exchange, 405, "{\"error\":\"Method not allowed\"}");
             return;
         }
-        sendText(exchange, 200, HTML, "text/html; charset=utf-8");
+        sendJson(exchange, 200, "{\"status\":\"ok\"}");
+    }
+
+    private static void handleExamples(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, "{\"error\":\"Method not allowed\"}");
+            return;
+        }
+        StringBuilder builder = new StringBuilder("{\"samples\":[");
+        boolean first = true;
+        for (Map.Entry<String, String> entry : ANALYSIS_SERVICE.sampleCatalog().entrySet()) {
+            if (!first) {
+                builder.append(',');
+            }
+            builder.append("{\"id\":\"")
+                    .append(escapeJson(entry.getKey()))
+                    .append("\",\"label\":\"")
+                    .append(escapeJson(entry.getValue()))
+                    .append("\"}");
+            first = false;
+        }
+        builder.append("]}");
+        sendJson(exchange, 200, builder.toString());
     }
 
     private static void handleAnalyze(HttpExchange exchange) throws IOException {
@@ -294,44 +70,28 @@ public final class SpaceServer {
 
         try {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            String filename = jsonValue(body, "filename");
-            String encodedData = jsonValue(body, "data");
-            String blockApp = jsonValue(body, "blockApp");
-            String blockDomain = jsonValue(body, "blockDomain");
-            String blockIp = jsonValue(body, "blockIp");
+            AnalysisService.RichAnalysisResult result = ANALYSIS_SERVICE.analyzeRich(
+                    jsonValue(body, "filename"),
+                    jsonValue(body, "data"),
+                    jsonValue(body, "sampleId"),
+                    jsonValue(body, "blockApp"),
+                    jsonValue(body, "blockDomain"),
+                    jsonValue(body, "blockIp")
+            );
 
-            if (encodedData == null || encodedData.isBlank()) {
-                sendJson(exchange, 400, "{\"error\":\"Missing PCAP data\"}");
-                return;
-            }
-
-            byte[] pcapBytes = Base64.getDecoder().decode(encodedData);
-            Path workDir = Files.createTempDirectory("dpi-space-" + Instant.now().toEpochMilli());
-            Path input = workDir.resolve(filename == null || filename.isBlank() ? "input.pcap" : sanitizeFilename(filename));
-            Path output = workDir.resolve("filtered-output.pcap");
-            Files.write(input, pcapBytes);
-
-            RuleManager ruleManager = new RuleManager();
-            if (blockApp != null && !blockApp.isBlank()) {
-                ruleManager.blockApp(blockApp);
-            }
-            if (blockDomain != null && !blockDomain.isBlank()) {
-                ruleManager.blockDomain(blockDomain);
-            }
-            if (blockIp != null && !blockIp.isBlank()) {
-                ruleManager.blockIp(blockIp);
-            }
-
-            DpiEngine.Config config = new DpiEngine.Config();
-            config.numLoadBalancers = 2;
-            config.fpsPerLoadBalancer = 2;
-            DpiEngine engine = new DpiEngine(config, ruleManager);
-            engine.processFile(input, output);
-
-            String token = UUID.randomUUID().toString();
-            DOWNLOADS.put(token, output);
-            String report = engine.generateReport();
-            String json = "{\"report\":\"" + escapeJson(report) + "\",\"downloadPath\":\"/download?id=" + token + "\"}";
+            String json = """
+                    {"report":"%s","downloadPath":"/download?id=%s","stats":{"totalPackets":%d,"forwarded":%d,"dropped":%d,"activeFlows":%d},"appBreakdown":[%s],"threadStats":[%s],"detectedDomains":[%s]}
+                    """.formatted(
+                    escapeJson(result.report()),
+                    escapeJson(result.token()),
+                    result.snapshot().stats().totalPackets(),
+                    result.snapshot().stats().forwarded(),
+                    result.snapshot().stats().dropped(),
+                    result.snapshot().stats().activeConnections(),
+                    appBreakdownJson(result.snapshot()),
+                    threadStatsJson(result.snapshot()),
+                    detectedDomainsJson(result.snapshot())
+            ).replace("\r", "").replace("\n", "");
             sendJson(exchange, 200, json);
         } catch (Exception exception) {
             String json = "{\"error\":\"" + escapeJson(exception.getMessage() == null ? exception.toString() : exception.getMessage()) + "\"}";
@@ -345,11 +105,11 @@ public final class SpaceServer {
             return;
         }
         String id = queryValue(exchange.getRequestURI(), "id");
-        if (id == null || !DOWNLOADS.containsKey(id)) {
+        Path file = id == null ? null : ANALYSIS_SERVICE.lookupDownload(id);
+        if (file == null || !Files.exists(file)) {
             sendText(exchange, 404, "File not found", "text/plain; charset=utf-8");
             return;
         }
-        Path file = DOWNLOADS.get(id);
         byte[] data = Files.readAllBytes(file);
         Headers headers = exchange.getResponseHeaders();
         headers.set("Content-Type", "application/vnd.tcpdump.pcap");
@@ -360,8 +120,33 @@ public final class SpaceServer {
         }
     }
 
+    private static void handleStatic(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendText(exchange, 405, "Method not allowed", "text/plain; charset=utf-8");
+            return;
+        }
+
+        String rawPath = exchange.getRequestURI().getPath();
+        String relative = "/".equals(rawPath) ? "index.html" : rawPath.substring(1);
+        Path file = WEB_ROOT.resolve(relative).normalize();
+        if (!file.startsWith(WEB_ROOT) || !Files.exists(file) || Files.isDirectory(file)) {
+            sendText(exchange, 404, "Not found", "text/plain; charset=utf-8");
+            return;
+        }
+
+        byte[] bytes = Files.readAllBytes(file);
+        sendBytes(exchange, 200, bytes, contentType(file.getFileName().toString()));
+    }
+
+    private static void sendJson(HttpExchange exchange, int status, String body) throws IOException {
+        sendBytes(exchange, status, body.getBytes(StandardCharsets.UTF_8), "application/json; charset=utf-8");
+    }
+
     private static void sendText(HttpExchange exchange, int status, String body, String contentType) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        sendBytes(exchange, status, body.getBytes(StandardCharsets.UTF_8), contentType);
+    }
+
+    private static void sendBytes(HttpExchange exchange, int status, byte[] bytes, String contentType) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream outputStream = exchange.getResponseBody()) {
@@ -369,12 +154,11 @@ public final class SpaceServer {
         }
     }
 
-    private static void sendJson(HttpExchange exchange, int status, String body) throws IOException {
-        sendText(exchange, status, body, "application/json; charset=utf-8");
-    }
-
-    private static String sanitizeFilename(String value) {
-        return value.replaceAll("[^A-Za-z0-9._-]", "_");
+    private static String contentType(String filename) {
+        if (filename.endsWith(".css")) return "text/css; charset=utf-8";
+        if (filename.endsWith(".js")) return "application/javascript; charset=utf-8";
+        if (filename.endsWith(".json")) return "application/json; charset=utf-8";
+        return "text/html; charset=utf-8";
     }
 
     private static String queryValue(URI uri, String key) {
@@ -406,7 +190,12 @@ public final class SpaceServer {
         for (int index = startQuote + 1; index < body.length(); index++) {
             char current = body.charAt(index);
             if (escaping) {
-                builder.append(current);
+                switch (current) {
+                    case 'n' -> builder.append('\n');
+                    case 'r' -> builder.append('\r');
+                    case 't' -> builder.append('\t');
+                    default -> builder.append(current);
+                }
                 escaping = false;
             } else if (current == '\\') {
                 escaping = true;
@@ -425,5 +214,52 @@ public final class SpaceServer {
                 .replace("\"", "\\\"")
                 .replace("\r", "")
                 .replace("\n", "\\n");
+    }
+
+    private static String appBreakdownJson(DpiEngine.EngineSnapshot snapshot) {
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, Long> entry : snapshot.appBreakdown().entrySet()) {
+            if (!first) builder.append(',');
+            builder.append("{\"name\":\"")
+                    .append(escapeJson(entry.getKey()))
+                    .append("\",\"value\":")
+                    .append(entry.getValue())
+                    .append("}");
+            first = false;
+        }
+        return builder.toString();
+    }
+
+    private static String threadStatsJson(DpiEngine.EngineSnapshot snapshot) {
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        for (DpiEngine.ThreadSnapshot stat : snapshot.threadStats()) {
+            if (!first) builder.append(',');
+            builder.append("{\"name\":\"")
+                    .append(escapeJson(stat.name()))
+                    .append("\",\"dispatched\":")
+                    .append(stat.dispatched())
+                    .append(",\"processed\":")
+                    .append(stat.processed())
+                    .append(",\"forwarded\":")
+                    .append(stat.forwarded())
+                    .append(",\"dropped\":")
+                    .append(stat.dropped())
+                    .append("}");
+            first = false;
+        }
+        return builder.toString();
+    }
+
+    private static String detectedDomainsJson(DpiEngine.EngineSnapshot snapshot) {
+        StringBuilder builder = new StringBuilder();
+        boolean first = true;
+        for (String domain : snapshot.detectedDomains()) {
+            if (!first) builder.append(',');
+            builder.append("\"").append(escapeJson(domain)).append("\"");
+            first = false;
+        }
+        return builder.toString();
     }
 }
